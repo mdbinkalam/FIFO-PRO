@@ -5,12 +5,12 @@ from io import BytesIO
 st.set_page_config(page_title="FIFO Crypto Report", layout="wide")
 st.title("📊 Crypto Report Generator")
 
-# Define debug mode globally so it's accessible in both tabs
 if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
 st.session_state.debug_mode = st.sidebar.checkbox("Debug Mode", value=st.session_state.debug_mode)
 
-tabs = st.tabs(["FIFO Report", "USDT Price Summary", "Preview vs Final"])
+# Tabs: FIFO Report and USDT Price Summary
+tabs = st.tabs(["FIFO Report", "USDT Price Summary"])
 
 with tabs[0]:
     uploaded_file = st.file_uploader("Upload your Excel report", type=["xlsx"], key="fifo_upload")
@@ -36,78 +36,78 @@ with tabs[0]:
 
                 for coin in coins:
                     coin_df = df[df['coin name'] == coin].copy()
-                    buys = coin_df[coin_df['type'].str.lower() == 'buy'].copy()
-                    sells = coin_df[coin_df['type'].str.lower() == 'sell'].copy()
+                    types = coin_df['type'].str.lower().unique()
 
-                    buy_queue = []
-                    for _, row in buys.iterrows():
-                        buy_queue.append({"date": row["date"], "amount": row["amount"], "price": row["price"]})
+                    for t in types:
+                        buys = coin_df[coin_df['type'].str.lower() == f'buy{t[-3:]}' ].copy()
+                        sells = coin_df[coin_df['type'].str.lower() == f'sell{t[-3:]}' ].copy()
 
-                    for _, sell in sells.iterrows():
-                        sell_amt = sell["amount"]
-                        used_buys = []
-                        total_cost = 0
-                        original_sell_amt = sell_amt
-                        sell_date = sell["date"]
-                        sell_price = sell["price"]
+                        buy_queue = []
+                        for _, row in buys.iterrows():
+                            buy_queue.append({"date": row["date"], "amount": row["amount"], "price": row["price"]})
 
-                        temp_queue = [b.copy() for b in buy_queue if b["date"] <= sell_date]
-                        if sum(b["amount"] for b in temp_queue) < sell_amt:
-                            report_rows.append({
-                                "Sell Date": sell_date,
-                                "Sell Amount": original_sell_amt,
-                                "Sell Price": sell_price,
-                                "Coin": coin,
-                                "Buy Date": "",
-                                "Buy Amount Used": "",
-                                "Buy Price": "",
-                                "Cost Basis": "",
-                                "Proceeds": "",
-                                "Gain": "",
-                                "Error": "Not enough eligible buy amount before this sell"
-                            })
-                            continue
+                        for _, sell in sells.iterrows():
+                            sell_amt = sell["amount"]
+                            used_buys = []
+                            total_cost = 0
+                            original_sell_amt = sell_amt
+                            sell_date = sell["date"]
+                            sell_price = sell["price"]
 
-                        new_queue = []
-                        for b in buy_queue:
-                            if b["date"] <= sell_date:
-                                new_queue.append(b.copy())
-
-                        updated_queue = []
-                        while sell_amt > 0 and new_queue:
-                            buy = new_queue.pop(0)
-                            use_amt = min(sell_amt, buy["amount"])
-                            cost = use_amt * buy["price"]
-                            used_buys.append((buy["date"], use_amt, buy["price"], cost))
-                            total_cost += cost
-                            sell_amt -= use_amt
-                            if buy["amount"] > use_amt:
-                                updated_queue.append({
-                                    "date": buy["date"],
-                                    "amount": buy["amount"] - use_amt,
-                                    "price": buy["price"]
+                            temp_queue = [b.copy() for b in buy_queue if b["date"] <= sell_date]
+                            if sum(b["amount"] for b in temp_queue) < sell_amt:
+                                report_rows.append({
+                                    "Sell Date": sell_date,
+                                    "Sell Amount": original_sell_amt,
+                                    "Sell Price": sell_price,
+                                    "Coin": coin,
+                                    "Buy Date": "",
+                                    "Buy Amount Used": "",
+                                    "Buy Price": "",
+                                    "Cost Basis": "",
+                                    "Proceeds": "",
+                                    "Gain": "",
+                                    "Error": f"Not enough eligible buys for {t}"
                                 })
+                                continue
 
-                        future_buys = [b for b in buy_queue if b["date"] > sell_date]
-                        buy_queue = updated_queue + future_buys
+                            new_queue = [b.copy() for b in buy_queue if b["date"] <= sell_date]
+                            updated_queue = []
 
-                        first = True
-                        for bd, amt, prc, cost in used_buys:
-                            row = {
-                                "Sell Date": sell_date if first else "",
-                                "Sell Amount": original_sell_amt if first else "",
-                                "Sell Price": sell_price if first else "",
-                                "Coin": coin if first else "",
-                                "Buy Date": bd,
-                                "Buy Amount Used": amt,
-                                "Buy Price": prc,
-                                "Cost Basis": cost,
-                                "Proceeds": original_sell_amt * sell_price if first else "",
-                                "Gain": (original_sell_amt * sell_price) - total_cost if first else "",
-                                "Error": ""
-                            }
-                            report_rows.append(row)
-                            first = False
+                            while sell_amt > 0 and new_queue:
+                                buy = new_queue.pop(0)
+                                use_amt = min(sell_amt, buy["amount"])
+                                cost = use_amt * buy["price"]
+                                used_buys.append((buy["date"], use_amt, buy["price"], cost))
+                                total_cost += cost
+                                sell_amt -= use_amt
+                                if buy["amount"] > use_amt:
+                                    updated_queue.append({
+                                        "date": buy["date"],
+                                        "amount": buy["amount"] - use_amt,
+                                        "price": buy["price"]
+                                    })
+
+                            future_buys = [b for b in buy_queue if b["date"] > sell_date]
+                            buy_queue = updated_queue + future_buys
+
+                            first = True
+                            for bd, amt, prc, cost in used_buys:
+                                row = {
+                                    "Sell Date": sell_date if first else "",
+                                    "Sell Amount": original_sell_amt if first else "",
+                                    "Sell Price": sell_price if first else "",
+                                    "Coin": coin if first else "",
+                                    "Buy Date": bd,
+                                    "Buy Amount Used": amt,
+                                    "Buy Price": prc,
+                                    "Cost Basis": cost,
+                                    "Proceeds": original_sell_amt * sell_price if first else "",
+                                    "Gain": (original_sell_amt * sell_price) - total_cost if first else "",
+                                    "Error": ""
+                                }
+                                report_rows.append(row)
+                                first = False
 
                 report_df = pd.DataFrame(report_rows)
                 st.subheader("📁 FIFO Report")
@@ -141,120 +141,4 @@ with tabs[0]:
             st.error(f"Something went wrong: {e}")
 
 with tabs[1]:
-    uploaded_summary = st.file_uploader("Upload your Excel report", type=["xlsx"], key="summary_upload")
-    summarize = st.button("Generate Coin Summary")
-
-    if uploaded_summary and summarize:
-        try:
-            df = pd.read_excel(uploaded_summary)
-            df.columns = [col.strip().lower() for col in df.columns]
-
-            if "crypto pair" in df.columns:
-                df["crypto pair"] = df["crypto pair"].str.upper().str.strip()
-                df["coin name"] = df["crypto pair"].str.extract(r"^([A-Z]+)(?=INR|USDT)", expand=False)
-            else:
-                st.error("Missing 'crypto pair' column needed to derive 'coin name'")
-                st.stop()
-
-            if st.session_state.debug_mode:
-                st.write("Preview:", df.head())
-                st.write("Detected columns:", df.columns.tolist())
-
-            summary_rows = []
-            coins = df['coin name'].unique()
-            avg_buy_prices = {}
-
-            for coin in coins:
-                coin_df = df[df['coin name'] == coin].copy()
-                buys = coin_df[coin_df['type'].str.lower() == 'buy']
-                if not buys.empty:
-                    total_buy_amount = buys['quantity'].sum()
-                    avg_buy_price = (buys['quantity'] * buys['average price']).sum() / total_buy_amount if total_buy_amount else 0
-                    avg_buy_prices[coin] = avg_buy_price
-
-            grouped = df.groupby("coin name")
-
-            for coin, group in grouped:
-                earliest_date = group["date"].min().date()
-                types = set(group["type"].str.lower())
-                action_type = "Both" if len(types) > 1 else ("Buy" if "buy" in types else "Sell")
-                total_amount = group["quantity"].sum()
-                avg_price = (group["quantity"] * group["average price"]).sum() / total_amount if total_amount else 0
-                net_amount = group["net amount in base currency"].sum()
-                tds = group["tds in inr"].sum() if "tds in inr" in group.columns else 0
-                if action_type == "Buy":
-                    tds = 0
-
-                pair = "USDT" if coin.endswith("USDT") else "INR"
-                usdt_price = ""
-                if action_type == "Sell" and pair == "USDT":
-                    sell_trades = group[group["type"].str.lower() == "sell"]
-                    usdt_received = sell_trades["net amount in base currency"].sum()
-                    sell_amount = sell_trades["quantity"].sum()
-                    buy_avg_price = avg_buy_prices.get(coin, avg_price)
-                    usdt_price = (sell_amount * buy_avg_price) / usdt_received if usdt_received else ""
-
-                summary_rows.append({
-                    "Date": earliest_date,
-                    "Buy/Sell": action_type,
-                    "Coin": coin,
-                    "Pair": pair,
-                    "Amount": total_amount,
-                    "Price": avg_price,
-                    "Net Amount in Base Currency": net_amount,
-                    "TDS in INR": tds,
-                    "USDT Price": usdt_price
-                })
-
-            summary_df = pd.DataFrame(summary_rows)
-            st.subheader("🕌 Coin Summary Report")
-            st.dataframe(summary_df)
-
-            output2 = BytesIO()
-            with pd.ExcelWriter(output2, engine='openpyxl') as writer:
-                summary_df.to_excel(writer, sheet_name="Coin Summary", index=False)
-            st.download_button(
-                "👅 Download Coin Summary",
-                data=output2.getvalue(),
-                file_name="coin_summary.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-
-        except Exception as e:
-            st.error(f"Error generating summary: {e}")
-
-with tabs[2]:
-    st.subheader("🆚 Preview vs Final Coin Summary")
-    uploaded_generated = st.file_uploader("Upload the generated report", type=["xlsx"], key="compare_generated")
-    uploaded_expected = st.file_uploader("Upload the expected correct report", type=["xlsx"], key="compare_expected")
-
-    if uploaded_generated and uploaded_expected:
-        try:
-            df_generated = pd.read_excel(uploaded_generated)
-            df_expected = pd.read_excel(uploaded_expected)
-
-            # Normalize columns
-            df_generated.columns = [col.strip().lower() for col in df_generated.columns]
-            df_expected.columns = [col.strip().lower() for col in df_expected.columns]
-
-            # Reset index and sort columns
-            df_generated = df_generated.reset_index(drop=True)
-            df_expected = df_expected.reset_index(drop=True)
-            df_generated = df_generated[sorted(df_generated.columns)]
-            df_expected = df_expected[sorted(df_expected.columns)]
-
-            st.write("✅ **Generated Report Preview:**")
-            st.dataframe(df_generated)
-
-            st.write("✅ **Expected Report Preview:**")
-            st.dataframe(df_expected)
-
-            if df_generated.equals(df_expected):
-                st.success("🎯 The reports are an exact match!")
-            else:
-                diff = df_generated.compare(df_expected, keep_shape=True, keep_equal=False)
-                st.warning("⚠️ Differences found between reports")
-                st.dataframe(diff)
-
-        except Exception as e:
-            st.error(f"Error comparing reports: {e}")
+    st.warning("USDT Price Summary currently disabled. Coming soon with better handling of average price logic.")
