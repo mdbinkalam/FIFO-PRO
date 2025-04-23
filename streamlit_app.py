@@ -233,6 +233,16 @@ with tabs[2]:
             df_generated = pd.read_excel(uploaded_generated)
             df_expected = pd.read_excel(uploaded_expected)
 
+            # Normalize columns
+            df_generated.columns = [col.strip().lower() for col in df_generated.columns]
+            df_expected.columns = [col.strip().lower() for col in df_expected.columns]
+
+            # Reset index and sort columns
+            df_generated = df_generated.reset_index(drop=True)
+            df_expected = df_expected.reset_index(drop=True)
+            df_generated = df_generated[sorted(df_generated.columns)]
+            df_expected = df_expected[sorted(df_expected.columns)]
+
             st.write("✅ **Generated Report Preview:**")
             st.dataframe(df_generated)
 
