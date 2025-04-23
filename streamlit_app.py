@@ -15,12 +15,12 @@ if uploaded_file and generate:
         st.write("Preview:", df.head())
 
         # Check required columns
-        required_cols = {"date", "type", "amount", "price"}
+        required_cols = {"date", "level", "amount", "price"}
         if not required_cols.issubset(set(df.columns)):
             st.error(f"Missing required columns: {required_cols - set(df.columns)}")
         else:
-            buys = df[df['type'] == 'buy'].copy().sort_values(by="date")
-            sells = df[df['type'] == 'sell'].copy().sort_values(by="date")
+            buys = df[df['level'].str.lower() == 'buy'].copy().sort_values(by="date")
+            sells = df[df['level'].str.lower() == 'sell'].copy().sort_values(by="date")
 
             if buys.empty or sells.empty:
                 st.warning("Could not find both Buy and Sell entries.")
@@ -97,3 +97,4 @@ if uploaded_file and generate:
                 )
     except Exception as e:
         st.error(f"Something went wrong: {e}")
+
