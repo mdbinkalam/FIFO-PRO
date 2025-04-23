@@ -100,13 +100,34 @@ if uploaded_file and generate:
                 st.subheader("📑 FIFO Report")
                 st.dataframe(report_df)
 
+                # Closing Stock Summary
+                closing_stock = pd.DataFrame(buy_queue) if buy_queue else pd.DataFrame(columns=["date", "amount", "price"])
+
+                def stock_summary(stock_df):
+                    if stock_df.empty:
+                        return {"Total Quantity": 0, "Total Value": 0, "Average Price": 0}
+                    total_qty = stock_df["amount"].sum()
+                    total_val = (stock_df["amount"] * stock_df["price"]).sum()
+                    avg_price = total_val / total_qty if total_qty else 0
+                    return {"Total Quantity": total_qty, "Total Value": total_val, "Average Price": avg_price}
+
+                closing_summary = stock_summary(closing_stock)
+
+                summary_df = pd.DataFrame([
+                    {"Type": "Closing Stock", **closing_summary}
+                ])
+
+                st.subheader("📦 Closing Stock Summary")
+                st.dataframe(summary_df)
+
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     report_df.to_excel(writer, sheet_name="FIFO Report", index=False)
+                    summary_df.to_excel(writer, sheet_name="Stock Summary", index=False)
                 st.download_button(
                     "📥 Download Report as Excel",
                     data=output.getvalue(),
-                    file_name="fifo_report.xlsx",
+                    file_name="fifo_with_stock_summary.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
     except Exception as e:
