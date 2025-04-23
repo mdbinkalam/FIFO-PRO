@@ -10,87 +10,90 @@ generate = st.button("Generate FIFO Report")
 if uploaded_file and generate:
     try:
         df = pd.read_excel(uploaded_file)
+        df.columns = [col.strip().lower() for col in df.columns]  # Normalize columns
         st.success("✅ File uploaded successfully!")
         st.write("Preview:", df.head())
 
-        # Simple FIFO check
-        buys = df[df['Type'].str.lower() == 'buy'].copy().sort_values(by="Date")
-        sells = df[df['Type'].str.lower() == 'sell'].copy().sort_values(by="Date")
-
-        if buys.empty or sells.empty:
-            st.warning("Could not find both Buy and Sell entries.")
+        # Check required columns
+        required_cols = {"date", "type", "amount", "price"}
+        if not required_cols.issubset(set(df.columns)):
+            st.error(f"Missing required columns: {required_cols - set(df.columns)}")
         else:
-            report_rows = []
-            buy_queue = []
+            buys = df[df['type'] == 'buy'].copy().sort_values(by="date")
+            sells = df[df['type'] == 'sell'].copy().sort_values(by="date")
 
-            for _, row in buys.iterrows():
-                buy_queue.append({
-                    "date": row["Date"],
-                    "amount": row["Amount"],
-                    "price": row["Price"]
-                })
+            if buys.empty or sells.empty:
+                st.warning("Could not find both Buy and Sell entries.")
+            else:
+                report_rows = []
+                buy_queue = []
 
-            for _, sell in sells.iterrows():
-                sell_amt = sell["Amount"]
-                used_buys = []
-                total_cost = 0
-                original_sell_amt = sell_amt
-
-                temp_queue = [b.copy() for b in buy_queue if b["date"] <= sell["Date"]]
-                if sum(b["amount"] for b in temp_queue) < sell_amt:
-                    report_rows.append({
-                        "Sell Date": sell["Date"],
-                        "Sell Amount": original_sell_amt,
-                        "Sell Price": sell["Price"],
-                        "Error": "Not enough eligible buy amount before this sell"
-                    })
-                    continue
-
-                new_queue = []
-                for b in buy_queue:
-                    if b["date"] <= sell["Date"]:
-                        new_queue.append(b)
-                    else:
-                        break
-
-                while sell_amt > 0 and new_queue:
-                    buy = new_queue[0]
-                    use_amt = min(sell_amt, buy["amount"])
-                    cost = use_amt * buy["price"]
-                    used_buys.append((buy["date"], use_amt, buy["price"], cost))
-                    total_cost += cost
-                    sell_amt -= use_amt
-                    buy["amount"] -= use_amt
-                    if buy["amount"] == 0:
-                        new_queue.pop(0)
-
-                buy_queue = new_queue + [b for b in buy_queue if b["date"] > sell["Date"]]
-
-                for bd, amt, prc, cost in used_buys:
-                    report_rows.append({
-                        "Sell Date": sell["Date"],
-                        "Sell Amount": original_sell_amt,
-                        "Sell Price": sell["Price"],
-                        "Buy Date": bd,
-                        "Buy Amount Used": amt,
-                        "Buy Price": prc,
-                        "Cost Basis": cost,
-                        "Proceeds": original_sell_amt * sell["Price"],
-                        "Gain": (original_sell_amt * sell["Price"]) - total_cost
+                for _, row in buys.iterrows():
+                    buy_queue.append({
+                        "date": row["date"],
+                        "amount": row["amount"],
+                        "price": row["price"]
                     })
 
-            report_df = pd.DataFrame(report_rows)
-            st.subheader("📑 FIFO Report")
-            st.dataframe(report_df)
+                for _, sell in sells.iterrows():
+                    sell_amt = sell["amount"]
+                    used_buys = []
+                    total_cost = 0
+                    original_sell_amt = sell_amt
 
-            # Download
-            st.download_button(
-                "📥 Download Report as Excel",
-                data=report_df.to_excel(index=False, engine='openpyxl'),
-                file_name="fifo_report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+                    temp_queue = [b.copy() for b in buy_queue if b["date"] <= sell["date"]]
+                    if sum(b["amount"] for b in temp_queue) < sell_amt:
+                        report_rows.append({
+                            "Sell Date": sell["date"],
+                            "Sell Amount": original_sell_amt,
+                            "Sell Price": sell["price"],
+                            "Error": "Not enough eligible buy amount before this sell"
+                        })
+                        continue
+
+                    new_queue = []
+                    for b in buy_queue:
+                        if b["date"] <= sell["date"]:
+                            new_queue.append(b)
+                        else:
+                            break
+
+                    while sell_amt > 0 and new_queue:
+                        buy = new_queue[0]
+                        use_amt = min(sell_amt, buy["amount"])
+                        cost = use_amt * buy["price"]
+                        used_buys.append((buy["date"], use_amt, buy["price"], cost))
+                        total_cost += cost
+                        sell_amt -= use_amt
+                        buy["amount"] -= use_amt
+                        if buy["amount"] == 0:
+                            new_queue.pop(0)
+
+                    buy_queue = new_queue + [b for b in buy_queue if b["date"] > sell["date"]]
+
+                    for bd, amt, prc, cost in used_buys:
+                        report_rows.append({
+                            "Sell Date": sell["date"],
+                            "Sell Amount": original_sell_amt,
+                            "Sell Price": sell["price"],
+                            "Buy Date": bd,
+                            "Buy Amount Used": amt,
+                            "Buy Price": prc,
+                            "Cost Basis": cost,
+                            "Proceeds": original_sell_amt * sell["price"],
+                            "Gain": (original_sell_amt * sell["price"]) - total_cost
+                        })
+
+                report_df = pd.DataFrame(report_rows)
+                st.subheader("📑 FIFO Report")
+                st.dataframe(report_df)
+
+                # Download
+                st.download_button(
+                    "📥 Download Report as Excel",
+                    data=report_df.to_excel(index=False, engine='openpyxl'),
+                    file_name="fifo_report.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
     except Exception as e:
         st.error(f"Something went wrong: {e}")
-
-
