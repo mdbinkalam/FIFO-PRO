@@ -151,7 +151,8 @@ with tabs[1]:
 
             # Fix: Extract 'coin name' from 'crypto pair'
             if "crypto pair" in df.columns:
-                df["coin name"] = df["crypto pair"].str.extract(r"([A-Z]+)(?=INR|USDT)", expand=False)
+                df["crypto pair"] = df["crypto pair"].str.upper().str.strip()
+                df["coin name"] = df["crypto pair"].str.extract(r"^([A-Z]+)(?=INR|USDT)", expand=False)
             else:
                 st.error("Missing 'crypto pair' column needed to derive 'coin name'")
                 st.stop()
