@@ -7,7 +7,6 @@ st.title("📊 FIFO Crypto Gain/Loss Report Generator")
 
 uploaded_file = st.file_uploader("Upload your Excel report", type=["xlsx"])
 generate = st.button("Generate FIFO Report")
-debug = st.sidebar.checkbox("Show debug info")
 
 if uploaded_file and generate:
     try:
@@ -16,25 +15,25 @@ if uploaded_file and generate:
         st.success("✅ File uploaded successfully!")
         st.write("Preview:", df.head())
 
-        if debug:
-            st.write("Detected columns:", df.columns.tolist())
-
-        required_cols = {"date", "type", "coin name", "amount", "price", "net amount"}
+        required_cols = {"date", "level", "amount", "price"}
         if not required_cols.issubset(set(df.columns)):
             st.error(f"Missing required columns: {required_cols - set(df.columns)}")
         else:
-            df = df.sort_values(by="date")
-            report_rows = []
-            coins = df['coin name'].unique()
+            buys = df[df['level'].str.lower() == 'buy'].copy().sort_values(by="date")
+            sells = df[df['level'].str.lower() == 'sell'].copy().sort_values(by="date")
 
-            for coin in coins:
-                coin_df = df[df['coin name'] == coin].copy()
-                buys = coin_df[coin_df['type'].str.lower() == 'buy'].copy()
-                sells = coin_df[coin_df['type'].str.lower() == 'sell'].copy()
-
+            if buys.empty or sells.empty:
+                st.warning("Could not find both Buy and Sell entries.")
+            else:
+                report_rows = []
                 buy_queue = []
+
                 for _, row in buys.iterrows():
-                    buy_queue.append({"date": row["date"], "amount": row["amount"], "price": row["price"]})
+                    buy_queue.append({
+                        "date": row["date"],
+                        "amount": row["amount"],
+                        "price": row["price"]
+                    })
 
                 for _, sell in sells.iterrows():
                     sell_amt = sell["amount"]
@@ -50,7 +49,6 @@ if uploaded_file and generate:
                             "Sell Date": sell_date,
                             "Sell Amount": original_sell_amt,
                             "Sell Price": sell_price,
-                            "Coin": coin,
                             "Buy Date": "",
                             "Buy Amount Used": "",
                             "Buy Price": "",
@@ -87,7 +85,6 @@ if uploaded_file and generate:
                             "Sell Date": sell_date if first else "",
                             "Sell Amount": original_sell_amt if first else "",
                             "Sell Price": sell_price if first else "",
-                            "Coin": coin if first else "",
                             "Buy Date": bd,
                             "Buy Amount Used": amt,
                             "Buy Price": prc,
@@ -99,34 +96,39 @@ if uploaded_file and generate:
                         report_rows.append(row)
                         first = False
 
-            report_df = pd.DataFrame(report_rows)
-            st.subheader("📑 FIFO Report")
-            st.dataframe(report_df)
+                report_df = pd.DataFrame(report_rows)
+                st.subheader("📑 FIFO Report")
+                st.dataframe(report_df)
 
-            # Closing Stock Summary
-            remaining_stock = pd.DataFrame(buy_queue)
-            def stock_summary(stock_df):
-                if stock_df.empty:
-                    return {"Total Quantity": 0, "Total Value": 0, "Average Price": 0}
-                total_qty = stock_df["amount"].sum()
-                total_val = (stock_df["amount"] * stock_df["price"]).sum()
-                avg_price = total_val / total_qty if total_qty else 0
-                return {"Total Quantity": total_qty, "Total Value": total_val, "Average Price": avg_price}
+                # Closing Stock Summary
+                closing_stock = pd.DataFrame(buy_queue) if buy_queue else pd.DataFrame(columns=["date", "amount", "price"])
 
-            summary_df = pd.DataFrame([{"Type": "Closing Stock", **stock_summary(remaining_stock)}])
+                def stock_summary(stock_df):
+                    if stock_df.empty:
+                        return {"Total Quantity": 0, "Total Value": 0, "Average Price": 0}
+                    total_qty = stock_df["amount"].sum()
+                    total_val = (stock_df["amount"] * stock_df["price"]).sum()
+                    avg_price = total_val / total_qty if total_qty else 0
+                    return {"Total Quantity": total_qty, "Total Value": total_val, "Average Price": avg_price}
 
-            st.subheader("📦 Closing Stock Summary")
-            st.dataframe(summary_df)
+                closing_summary = stock_summary(closing_stock)
 
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                report_df.to_excel(writer, sheet_name="FIFO Report", index=False)
-                summary_df.to_excel(writer, sheet_name="Stock Summary", index=False)
-            st.download_button(
-                "📥 Download Report as Excel",
-                data=output.getvalue(),
-                file_name="fifo_with_closing_stock.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+                summary_df = pd.DataFrame([
+                    {"Type": "Closing Stock", **closing_summary}
+                ])
+
+                st.subheader("📦 Closing Stock Summary")
+                st.dataframe(summary_df)
+
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    report_df.to_excel(writer, sheet_name="FIFO Report", index=False)
+                    summary_df.to_excel(writer, sheet_name="Stock Summary", index=False)
+                st.download_button(
+                    "📥 Download Report as Excel",
+                    data=output.getvalue(),
+                    file_name="fifo_with_stock_summary.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
     except Exception as e:
         st.error(f"Something went wrong: {e}")
