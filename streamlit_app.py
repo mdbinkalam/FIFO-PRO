@@ -148,6 +148,14 @@ with tabs[1]:
         try:
             df = pd.read_excel(uploaded_summary)
             df.columns = [col.strip().lower() for col in df.columns]
+
+            # Fix: Extract 'coin name' from 'crypto pair'
+            if "crypto pair" in df.columns:
+                df["coin name"] = df["crypto pair"].str.extract(r"([A-Z]+)(?=INR|USDT)", expand=False)
+            else:
+                st.error("Missing 'crypto pair' column needed to derive 'coin name'")
+                st.stop()
+
             if st.session_state.debug_mode:
                 st.write("Preview:", df.head())
                 st.write("Detected columns:", df.columns.tolist())
@@ -160,8 +168,8 @@ with tabs[1]:
                 coin_df = df[df['coin name'] == coin].copy()
                 buys = coin_df[coin_df['type'].str.lower() == 'buy']
                 if not buys.empty:
-                    total_buy_amount = buys['amount'].sum()
-                    avg_buy_price = (buys['amount'] * buys['price']).sum() / total_buy_amount if total_buy_amount else 0
+                    total_buy_amount = buys['quantity'].sum()
+                    avg_buy_price = (buys['quantity'] * buys['average price']).sum() / total_buy_amount if total_buy_amount else 0
                     avg_buy_prices[coin] = avg_buy_price
 
             grouped = df.groupby("coin name")
@@ -170,10 +178,10 @@ with tabs[1]:
                 earliest_date = group["date"].min().date()
                 types = set(group["type"].str.lower())
                 action_type = "Both" if len(types) > 1 else ("Buy" if "buy" in types else "Sell")
-                total_amount = group["amount"].sum()
-                avg_price = (group["amount"] * group["price"]).sum() / total_amount if total_amount else 0
-                net_amount = group["net amount"].sum()
-                tds = group["tds"].sum() if "tds" in group.columns else 0
+                total_amount = group["quantity"].sum()
+                avg_price = (group["quantity"] * group["average price"]).sum() / total_amount if total_amount else 0
+                net_amount = group["net amount in base currency"].sum()
+                tds = group["tds in inr"].sum() if "tds in inr" in group.columns else 0
                 if action_type == "Buy":
                     tds = 0
 
@@ -181,8 +189,8 @@ with tabs[1]:
                 usdt_price = ""
                 if action_type == "Sell" and pair == "USDT":
                     sell_trades = group[group["type"].str.lower() == "sell"]
-                    usdt_received = sell_trades["net amount"].sum()
-                    sell_amount = sell_trades["amount"].sum()
+                    usdt_received = sell_trades["net amount in base currency"].sum()
+                    sell_amount = sell_trades["quantity"].sum()
                     buy_avg_price = avg_buy_prices.get(coin, avg_price)
                     usdt_price = (sell_amount * buy_avg_price) / usdt_received if usdt_received else ""
 
