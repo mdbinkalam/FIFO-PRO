@@ -14,6 +14,7 @@ if uploaded_file and generate:
         df.columns = [col.strip().lower() for col in df.columns]  # Normalize columns
         st.success("✅ File uploaded successfully!")
         st.write("Preview:", df.head())
+        st.write("Detected columns:", df.columns.tolist())
 
         required_cols = {"date", "type", "coin name", "amount", "price", "net amount"}
         if not required_cols.issubset(set(df.columns)):
