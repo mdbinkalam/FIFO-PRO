@@ -8,8 +8,7 @@ st.title("📊 Crypto Report Generator")
 # Define debug mode globally so it's accessible in both tabs
 if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
-debug_mode = st.sidebar.checkbox("Debug Mode", value=st.session_state.debug_mode)
-st.session_state.debug_mode = debug_mode
+st.session_state.debug_mode = st.sidebar.checkbox("Debug Mode", value=st.session_state.debug_mode)
 
 tabs = st.tabs(["FIFO Report", "USDT Price Summary"])
 
@@ -23,7 +22,7 @@ with tabs[0]:
             df.columns = [col.strip().lower() for col in df.columns]  # Normalize columns
             st.success("✅ File uploaded successfully!")
 
-            if debug_mode:
+            if st.session_state.debug_mode:
                 st.write("Preview:", df.head())
                 st.write("Detected columns:", df.columns.tolist())
 
@@ -149,7 +148,7 @@ with tabs[1]:
         try:
             df = pd.read_excel(uploaded_summary)
             df.columns = [col.strip().lower() for col in df.columns]  # Normalize columns
-            if debug_mode:
+            if st.session_state.debug_mode:
                 st.write("Preview:", df.head())
                 st.write("Detected columns:", df.columns.tolist())
 
