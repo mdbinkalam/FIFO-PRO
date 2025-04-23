@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from io import BytesIO
 
 st.set_page_config(page_title="FIFO Crypto Report", layout="wide")
 st.title("📊 FIFO Crypto Gain/Loss Report Generator")
@@ -89,12 +90,14 @@ if uploaded_file and generate:
                 st.dataframe(report_df)
 
                 # Download
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    report_df.to_excel(writer, index=False)
                 st.download_button(
                     "📥 Download Report as Excel",
-                    data=report_df.to_excel(index=False, engine='openpyxl'),
+                    data=output.getvalue(),
                     file_name="fifo_report.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
     except Exception as e:
         st.error(f"Something went wrong: {e}")
-
