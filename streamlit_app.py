@@ -15,7 +15,6 @@ if uploaded_file and generate:
         st.success("✅ File uploaded successfully!")
         st.write("Preview:", df.head())
 
-        # Check required columns
         required_cols = {"date", "level", "amount", "price"}
         if not required_cols.issubset(set(df.columns)):
             st.error(f"Missing required columns: {required_cols - set(df.columns)}")
@@ -41,20 +40,28 @@ if uploaded_file and generate:
                     used_buys = []
                     total_cost = 0
                     original_sell_amt = sell_amt
+                    sell_date = sell["date"]
+                    sell_price = sell["price"]
 
-                    temp_queue = [b.copy() for b in buy_queue if b["date"] <= sell["date"]]
+                    temp_queue = [b.copy() for b in buy_queue if b["date"] <= sell_date]
                     if sum(b["amount"] for b in temp_queue) < sell_amt:
                         report_rows.append({
-                            "Sell Date": sell["date"],
+                            "Sell Date": sell_date,
                             "Sell Amount": original_sell_amt,
-                            "Sell Price": sell["price"],
+                            "Sell Price": sell_price,
+                            "Buy Date": "",
+                            "Buy Amount Used": "",
+                            "Buy Price": "",
+                            "Cost Basis": "",
+                            "Proceeds": "",
+                            "Gain": "",
                             "Error": "Not enough eligible buy amount before this sell"
                         })
                         continue
 
                     new_queue = []
                     for b in buy_queue:
-                        if b["date"] <= sell["date"]:
+                        if b["date"] <= sell_date:
                             new_queue.append(b)
                         else:
                             break
@@ -70,33 +77,55 @@ if uploaded_file and generate:
                         if buy["amount"] == 0:
                             new_queue.pop(0)
 
-                    buy_queue = new_queue + [b for b in buy_queue if b["date"] > sell["date"]]
+                    buy_queue = new_queue + [b for b in buy_queue if b["date"] > sell_date]
 
+                    first = True
                     for bd, amt, prc, cost in used_buys:
-                        report_rows.append({
-                            "Sell Date": sell["date"],
-                            "Sell Amount": original_sell_amt,
-                            "Sell Price": sell["price"],
+                        row = {
+                            "Sell Date": sell_date if first else "",
+                            "Sell Amount": original_sell_amt if first else "",
+                            "Sell Price": sell_price if first else "",
                             "Buy Date": bd,
                             "Buy Amount Used": amt,
                             "Buy Price": prc,
                             "Cost Basis": cost,
-                            "Proceeds": original_sell_amt * sell["price"],
-                            "Gain": (original_sell_amt * sell["price"]) - total_cost
-                        })
+                            "Proceeds": original_sell_amt * sell_price if first else "",
+                            "Gain": (original_sell_amt * sell_price) - total_cost if first else "",
+                            "Error": ""
+                        }
+                        report_rows.append(row)
+                        first = False
 
                 report_df = pd.DataFrame(report_rows)
                 st.subheader("📑 FIFO Report")
                 st.dataframe(report_df)
 
-                # Download
+                # Average Cost Summary
+                summary_rows = []
+                grouped = buys.groupby("date")
+                for date, group in grouped:
+                    total_qty = group["amount"].sum()
+                    total_val = (group["amount"] * group["price"]).sum()
+                    avg_price = total_val / total_qty if total_qty else 0
+                    summary_rows.append({
+                        "Buy Date": date,
+                        "Total Quantity": total_qty,
+                        "Total Value": total_val,
+                        "Average Cost per Unit": avg_price
+                    })
+
+                summary_df = pd.DataFrame(summary_rows)
+                st.subheader("📊 Average Cost Summary")
+                st.dataframe(summary_df)
+
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    report_df.to_excel(writer, index=False)
+                    report_df.to_excel(writer, sheet_name="FIFO Report", index=False)
+                    summary_df.to_excel(writer, sheet_name="Avg Cost Summary", index=False)
                 st.download_button(
                     "📥 Download Report as Excel",
                     data=output.getvalue(),
-                    file_name="fifo_report.xlsx",
+                    file_name="fifo_with_avg_cost_summary.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
     except Exception as e:
