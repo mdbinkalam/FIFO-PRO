@@ -101,17 +101,26 @@ if uploaded_file and generate:
                 st.dataframe(report_df)
 
                 # Opening and Closing Stock Summary
-                total_buy_qty = buys["amount"].sum()
-                total_buy_val = (buys["amount"] * buys["price"]).sum()
-                avg_cost = total_buy_val / total_buy_qty if total_buy_qty else 0
+                opening_date = df['date'].min()
+                closing_date = df['date'].max()
 
-                total_sell_qty = sells["amount"].sum()
-                closing_qty = total_buy_qty - total_sell_qty
-                closing_val = closing_qty * avg_cost
+                opening_stock = buys[buys['date'] <= opening_date]
+                closing_stock = pd.DataFrame(buy_queue) if buy_queue else pd.DataFrame(columns=["date", "amount", "price"])
+
+                def stock_summary(stock_df):
+                    if stock_df.empty:
+                        return {"Total Quantity": 0, "Total Value": 0, "Average Price": 0}
+                    total_qty = stock_df["amount"].sum()
+                    total_val = (stock_df["amount"] * stock_df["price"]).sum()
+                    avg_price = total_val / total_qty if total_qty else 0
+                    return {"Total Quantity": total_qty, "Total Value": total_val, "Average Price": avg_price}
+
+                opening_summary = stock_summary(opening_stock)
+                closing_summary = stock_summary(closing_stock)
 
                 summary_df = pd.DataFrame([
-                    {"Stock Type": "Opening Stock", "Quantity": total_buy_qty, "Total Value": total_buy_val, "Avg Cost/Unit": avg_cost},
-                    {"Stock Type": "Closing Stock", "Quantity": closing_qty, "Total Value": closing_val, "Avg Cost/Unit": avg_cost}
+                    {"Type": "Opening Stock", **opening_summary},
+                    {"Type": "Closing Stock", **closing_summary}
                 ])
 
                 st.subheader("📦 Stock Summary")
@@ -124,7 +133,7 @@ if uploaded_file and generate:
                 st.download_button(
                     "📥 Download Report as Excel",
                     data=output.getvalue(),
-                    file_name="fifo_report_with_stock_summary.xlsx",
+                    file_name="fifo_with_stock_summary.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
     except Exception as e:
