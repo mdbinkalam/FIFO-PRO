@@ -147,12 +147,23 @@ with tabs[1]:
     if uploaded_summary and summarize:
         try:
             df = pd.read_excel(uploaded_summary)
-            df.columns = [col.strip().lower() for col in df.columns]  # Normalize columns
+            df.columns = [col.strip().lower() for col in df.columns]
             if st.session_state.debug_mode:
                 st.write("Preview:", df.head())
                 st.write("Detected columns:", df.columns.tolist())
 
             summary_rows = []
+            coins = df['coin name'].unique()
+            avg_buy_prices = {}
+
+            for coin in coins:
+                coin_df = df[df['coin name'] == coin].copy()
+                buys = coin_df[coin_df['type'].str.lower() == 'buy']
+                if not buys.empty:
+                    total_buy_amount = buys['amount'].sum()
+                    avg_buy_price = (buys['amount'] * buys['price']).sum() / total_buy_amount if total_buy_amount else 0
+                    avg_buy_prices[coin] = avg_buy_price
+
             grouped = df.groupby("coin name")
 
             for coin, group in grouped:
@@ -171,8 +182,9 @@ with tabs[1]:
                 if action_type == "Sell" and pair == "USDT":
                     sell_trades = group[group["type"].str.lower() == "sell"]
                     usdt_received = sell_trades["net amount"].sum()
-                    avg_buy_inr = avg_price  # Assuming avg buy price is same as average price
-                    usdt_price = (total_amount * avg_buy_inr) / usdt_received if usdt_received else ""
+                    sell_amount = sell_trades["amount"].sum()
+                    buy_avg_price = avg_buy_prices.get(coin, avg_price)
+                    usdt_price = (sell_amount * buy_avg_price) / usdt_received if usdt_received else ""
 
                 summary_rows.append({
                     "Date": earliest_date,
