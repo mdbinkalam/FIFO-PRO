@@ -5,8 +5,9 @@ st.set_page_config(page_title="FIFO Crypto Report", layout="wide")
 st.title("📊 FIFO Crypto Gain/Loss Report Generator")
 
 uploaded_file = st.file_uploader("Upload your Excel report", type=["xlsx"])
+generate = st.button("Generate FIFO Report")
 
-if uploaded_file:
+if uploaded_file and generate:
     try:
         df = pd.read_excel(uploaded_file)
         st.success("✅ File uploaded successfully!")
@@ -80,3 +81,4 @@ if uploaded_file:
             )
     except Exception as e:
         st.error(f"Something went wrong: {e}")
+
