@@ -10,7 +10,7 @@ if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
 st.session_state.debug_mode = st.sidebar.checkbox("Debug Mode", value=st.session_state.debug_mode)
 
-tabs = st.tabs(["FIFO Report", "USDT Price Summary"])
+tabs = st.tabs(["FIFO Report", "USDT Price Summary", "Preview vs Final"])
 
 with tabs[0]:
     uploaded_file = st.file_uploader("Upload your Excel report", type=["xlsx"], key="fifo_upload")
@@ -149,7 +149,6 @@ with tabs[1]:
             df = pd.read_excel(uploaded_summary)
             df.columns = [col.strip().lower() for col in df.columns]
 
-            # Fix: Extract 'coin name' from 'crypto pair'
             if "crypto pair" in df.columns:
                 df["crypto pair"] = df["crypto pair"].str.upper().str.strip()
                 df["coin name"] = df["crypto pair"].str.extract(r"^([A-Z]+)(?=INR|USDT)", expand=False)
@@ -223,3 +222,29 @@ with tabs[1]:
 
         except Exception as e:
             st.error(f"Error generating summary: {e}")
+
+with tabs[2]:
+    st.subheader("🆚 Preview vs Final Coin Summary")
+    uploaded_generated = st.file_uploader("Upload the generated report", type=["xlsx"], key="compare_generated")
+    uploaded_expected = st.file_uploader("Upload the expected correct report", type=["xlsx"], key="compare_expected")
+
+    if uploaded_generated and uploaded_expected:
+        try:
+            df_generated = pd.read_excel(uploaded_generated)
+            df_expected = pd.read_excel(uploaded_expected)
+
+            st.write("✅ **Generated Report Preview:**")
+            st.dataframe(df_generated)
+
+            st.write("✅ **Expected Report Preview:**")
+            st.dataframe(df_expected)
+
+            if df_generated.equals(df_expected):
+                st.success("🎯 The reports are an exact match!")
+            else:
+                diff = df_generated.compare(df_expected, keep_shape=True, keep_equal=False)
+                st.warning("⚠️ Differences found between reports")
+                st.dataframe(diff)
+
+        except Exception as e:
+            st.error(f"Error comparing reports: {e}")
