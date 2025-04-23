@@ -100,32 +100,31 @@ if uploaded_file and generate:
                 st.subheader("📑 FIFO Report")
                 st.dataframe(report_df)
 
-                # Average Cost Summary
-                summary_rows = []
-                grouped = buys.groupby("date")
-                for date, group in grouped:
-                    total_qty = group["amount"].sum()
-                    total_val = (group["amount"] * group["price"]).sum()
-                    avg_price = total_val / total_qty if total_qty else 0
-                    summary_rows.append({
-                        "Buy Date": date,
-                        "Total Quantity": total_qty,
-                        "Total Value": total_val,
-                        "Average Cost per Unit": avg_price
-                    })
+                # Opening and Closing Stock Summary
+                total_buy_qty = buys["amount"].sum()
+                total_buy_val = (buys["amount"] * buys["price"]).sum()
+                avg_cost = total_buy_val / total_buy_qty if total_buy_qty else 0
 
-                summary_df = pd.DataFrame(summary_rows)
-                st.subheader("📊 Average Cost Summary")
+                total_sell_qty = sells["amount"].sum()
+                closing_qty = total_buy_qty - total_sell_qty
+                closing_val = closing_qty * avg_cost
+
+                summary_df = pd.DataFrame([
+                    {"Stock Type": "Opening Stock", "Quantity": total_buy_qty, "Total Value": total_buy_val, "Avg Cost/Unit": avg_cost},
+                    {"Stock Type": "Closing Stock", "Quantity": closing_qty, "Total Value": closing_val, "Avg Cost/Unit": avg_cost}
+                ])
+
+                st.subheader("📦 Stock Summary")
                 st.dataframe(summary_df)
 
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
                     report_df.to_excel(writer, sheet_name="FIFO Report", index=False)
-                    summary_df.to_excel(writer, sheet_name="Avg Cost Summary", index=False)
+                    summary_df.to_excel(writer, sheet_name="Stock Summary", index=False)
                 st.download_button(
                     "📥 Download Report as Excel",
                     data=output.getvalue(),
-                    file_name="fifo_with_avg_cost_summary.xlsx",
+                    file_name="fifo_report_with_stock_summary.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
     except Exception as e:
