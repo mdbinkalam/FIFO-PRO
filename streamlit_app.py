@@ -5,6 +5,12 @@ from io import BytesIO
 st.set_page_config(page_title="FIFO Crypto Report", layout="wide")
 st.title("📊 Crypto Report Generator")
 
+# Define debug mode globally so it's accessible in both tabs
+if "debug_mode" not in st.session_state:
+    st.session_state.debug_mode = False
+debug_mode = st.sidebar.checkbox("Debug Mode", value=st.session_state.debug_mode)
+st.session_state.debug_mode = debug_mode
+
 tabs = st.tabs(["FIFO Report", "USDT Price Summary"])
 
 with tabs[0]:
@@ -17,7 +23,6 @@ with tabs[0]:
             df.columns = [col.strip().lower() for col in df.columns]  # Normalize columns
             st.success("✅ File uploaded successfully!")
 
-            debug_mode = st.checkbox("Debug Mode")
             if debug_mode:
                 st.write("Preview:", df.head())
                 st.write("Detected columns:", df.columns.tolist())
@@ -67,22 +72,25 @@ with tabs[0]:
                         new_queue = []
                         for b in buy_queue:
                             if b["date"] <= sell_date:
-                                new_queue.append(b)
-                            else:
-                                break
+                                new_queue.append(b.copy())
 
+                        updated_queue = []
                         while sell_amt > 0 and new_queue:
-                            buy = new_queue[0]
+                            buy = new_queue.pop(0)
                             use_amt = min(sell_amt, buy["amount"])
                             cost = use_amt * buy["price"]
                             used_buys.append((buy["date"], use_amt, buy["price"], cost))
                             total_cost += cost
                             sell_amt -= use_amt
-                            buy["amount"] -= use_amt
-                            if buy["amount"] == 0:
-                                new_queue.pop(0)
+                            if buy["amount"] > use_amt:
+                                updated_queue.append({
+                                    "date": buy["date"],
+                                    "amount": buy["amount"] - use_amt,
+                                    "price": buy["price"]
+                                })
 
-                        buy_queue = new_queue + [b for b in buy_queue if b["date"] > sell_date]
+                        future_buys = [b for b in buy_queue if b["date"] > sell_date]
+                        buy_queue = updated_queue + future_buys
 
                         first = True
                         for bd, amt, prc, cost in used_buys:
@@ -103,7 +111,7 @@ with tabs[0]:
                             first = False
 
                 report_df = pd.DataFrame(report_rows)
-                st.subheader("📑 FIFO Report")
+                st.subheader("📁 FIFO Report")
                 st.dataframe(report_df)
 
                 remaining_stock = pd.DataFrame(buy_queue)
@@ -125,7 +133,7 @@ with tabs[0]:
                     report_df.to_excel(writer, sheet_name="FIFO Report", index=False)
                     summary_df.to_excel(writer, sheet_name="Stock Summary", index=False)
                 st.download_button(
-                    "📥 Download Report as Excel",
+                    "👅 Download Report as Excel",
                     data=output.getvalue(),
                     file_name="fifo_with_closing_stock.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -180,14 +188,14 @@ with tabs[1]:
                 })
 
             summary_df = pd.DataFrame(summary_rows)
-            st.subheader("📌 Coin Summary Report")
+            st.subheader("🕌 Coin Summary Report")
             st.dataframe(summary_df)
 
             output2 = BytesIO()
             with pd.ExcelWriter(output2, engine='openpyxl') as writer:
                 summary_df.to_excel(writer, sheet_name="Coin Summary", index=False)
             st.download_button(
-                "📥 Download Coin Summary",
+                "👅 Download Coin Summary",
                 data=output2.getvalue(),
                 file_name="coin_summary.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
