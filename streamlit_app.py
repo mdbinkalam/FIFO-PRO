@@ -7,6 +7,7 @@ st.title("📊 FIFO Crypto Gain/Loss Report Generator")
 
 uploaded_file = st.file_uploader("Upload your Excel report", type=["xlsx"])
 generate = st.button("Generate FIFO Report")
+debug = st.sidebar.checkbox("Show debug info")
 
 if uploaded_file and generate:
     try:
@@ -14,7 +15,9 @@ if uploaded_file and generate:
         df.columns = [col.strip().lower() for col in df.columns]  # Normalize columns
         st.success("✅ File uploaded successfully!")
         st.write("Preview:", df.head())
-        st.write("Detected columns:", df.columns.tolist())
+
+        if debug:
+            st.write("Detected columns:", df.columns.tolist())
 
         required_cols = {"date", "type", "coin name", "amount", "price", "net amount"}
         if not required_cols.issubset(set(df.columns)):
